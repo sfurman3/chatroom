@@ -41,7 +41,7 @@
 	\section{Overview}
 	Your goal is to implement a simple, FIFO consistent chat room using TCP sockets. Your system will consist of a set of servers, all connected to each other. Each server will keep track of all messages it has received from other servers (including itself) in FIFO order. Additionally each server should keep track of the other servers it believes are alive at the moment.
 	
-	Each server receives commands from a master and respond to that master. A list of these commands is shown in \autoref{tab:commands} and the responses are shown in \autoref{tab:commands2}.
+	Each server receives commands from a master and responds to that master. A list of these commands is shown in \autoref{tab:commands} and the responses are shown in \autoref{tab:commands2}.
 	
 	To convince yourself and us that you have built a successful project, your code will have to pass a number of test cases.  The test cases typically require the system to process some command and to behave correctly in the presence of failures.  The master connects to all the not-crashed servers and will play a central role in	your ability to run the test cases.
 	
@@ -60,16 +60,16 @@
 	\begin{compactitem}
 		\item Your server must be fully operational within $3$ seconds of being started. Specifically it must be prepared to handle commands from the master accurately and all other servers must be able to recognize that it is alive.
 		\item Your servers must be able to detect a server has failed within $1$ second.
-		\item Your system must be able to handle 10 broadcasts from the same server within $1$ second accurately. This also implies that if the master were to sleep for a second after sending $10$ broadcast commands, all alive servers must have received the broadcast and be prepared to respond accurately to a \texttt{get} command.
+		\item Your system must be able to handle at least 10 broadcasts from the same server within $1$ second accurately. This also implies that if the master were to sleep for a second after sending $10$ broadcast commands, all alive servers must have received the broadcast and be prepared to respond accurately to a \texttt{get} command.
 		\item An additional implication is that if the master were to sleep for a second after sending a broadcast command, the associated message should come before all other subsequent broadcasts in all message logs.
 	\end{compactitem}
 	
 	\section{Implementation hints}
 	
 	\begin{compactitem}
-		\item You can use any programming language to implement the system---still, as a courtesy, if the programming language you plan to use is particularly esoteric, please talk to Cong. 
+		\item You can use any programming language to implement the system---still, as a courtesy, if the programming language you plan to use is particularly esoteric, please talk to Matt or Cong.
 		\item Servers should not retain their message logs after a crash. Each server begins with an empty log and should not attempt to catch up on logs previously sent logs.
-		\item When using Java, you may find that when a server is restarted after a crash, its ports are already in use. This is due to the fact that Java sockets will reserve port numbers for a certain amount of time even after a crash. Look for a way to resolve this issue.
+		\item When using some programming languages (e.g., Java), you may find that when a server crashes, its ports are in use and can't be reused after a restart. This is due to the fact that Java sockets will reserve port numbers for a certain amount of time even after a crash. Look for a way to resolve this issue.
 		\item In this project, we let all logical servers run on the same physical 
 		computer. However, each server must be a separate process that uses TCP sockets to communicate with the other servers and the master.
 		\item The correctness of your implementation should not be based on any ``artificial'' delays imposed by you (e.g. thread.sleep(5000)).
@@ -99,11 +99,11 @@
 			\item \texttt{build} -- This script compiles your code and generates binary. If you use C/C++, you may want to have a simple `make' command in the script. If you use Python/Perl/Ruby, you may let this script do nothing. If you use Java, you may use `javac' command or tools like Ant or Maven to compile your code.
 			
 			\item \texttt{process} -- This script accepts three arguments: process id, maximum number of processes, and client/master-facing port. If you write in C/C++/Golang, you can make your binary named \texttt{process}, or use another binary name and call it in \texttt{process}. If	you write in Python/Perl/Ruby, you can simply call your script	in \texttt{process}. If you write in Java, use `java' command to run your code in \texttt{process} script.
-			\item \texttt{stopall} -- This script kills all your processes. You can use either ``\texttt{killall}'' command or ``\texttt{ps aux | grep XXX | awk '\{print \$2\}' | xargs kill}''.
-			\item Please make sure \texttt{build}, \texttt{process}, and \texttt{stopall} scripts have executable permission and can be run directly with command \texttt{./build}, \texttt{./process	$\langle$id$\rangle$ $\langle$n$\rangle$ $\langle$port$\rangle$}, and \texttt{./stopall}.
+            \item \texttt{stopall} -- This script kills all your processes. You can use either ``\texttt{killall}'' command or ``\texttt{ps aux | grep XXX | awk '\{print \$2\}' | xargs kill}''. Please make sure it doesn't kill the master and auto-grading program. \texttt{killall python} is a good example of killing the master, which is NOT allowed to be put in to the \texttt{stopall} script.
+            \item Please make sure \texttt{build}, \texttt{process}, and \texttt{stopall} scripts have executable permission and can be run directly with command \texttt{./build}, \texttt{./process	$\langle$id$\rangle$ $\langle$n$\rangle$ $\langle$port$\rangle$}, and \texttt{./stopall}, even when it is empty if you use Python.
 		\end{compactitem}
-		\item You are also expected to include your test cases in your submission,
-		following the sample test cases we provide.
+		\item You are also expected to include your test cases in your submission, following the sample test cases we provide.
+        \item Please make sure your code works on Linux. You can use any Linux distribution in recent 5 years or so. We will primarily use Ubuntu 16.04 LTS in a virtual machine above VirtualBox to test your code. If you use other distributions, please specify in the \texttt{README.md} file.
 	\end{compactitem}
 	
 	You will be submitting your code via CMS. Please make a tar file named NedId.tar (for example \texttt{cd564.tar}) with the following structure (replace \texttt{cd564} with your NetId).
