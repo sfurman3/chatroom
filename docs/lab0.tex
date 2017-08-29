@@ -44,7 +44,7 @@
     Your goal is to implement a simple, FIFO consistent chat room using TCP sockets.
     Your system will consist of a set of servers, all connected to each other.
     Each server will keep track of all messages it has received from other servers (including itself) in FIFO order.
-    Additionally each server should keep track of the other servers it believes are alive at the moment.
+    Additionally, each server should keep track of the other servers it believes are alive at the moment.
 
     Each server receives commands from a master and responds to that master.
     A list of these commands is shown in~\autoref{tab:commands} and the responses are shown in~\autoref{tab:commands2}.
@@ -53,7 +53,7 @@
     The test cases typically require the system to process some command and to behave correctly in the presence of failures.
     The master connects to all the not-crashed servers and will play a central role in your ability to run the test cases.
 
-    The master is free to send \texttt{get}, \texttt{alive}, and \texttt{broadcast} commands to to any server, and that server should respond in a timely manner if appropriate.
+    The master is free to send \texttt{get}, \texttt{alive}, and \texttt{broadcast} commands to any server, and that server should respond in a timely manner if appropriate.
 
     We have developed a master client and we are providing its source code to you.
     See \url{https://github.com/Cornell-CS5414/chatroom}.
@@ -63,8 +63,8 @@
 
     \section{Failures}\label{sec:failures}
     Your implementation must be able to detect and tolerate servers failing.
-    If a server were to fail, the other servers' message logs should not be impacted.
-    Furthermore, they should be able to detect that the server has failed and remove the server from their alive set.
+    When a server fails, the other servers' message logs should not be impacted.
+    Furthermore, correct servers  should be able to detect which server has failed and remove it from their alive set.
 
     Servers fail by crashing.
     It should be possible to either cause the crash of a process non-deterministically (as in an operator issuing a ctrl-C) or deterministically (for instance, by having processes crash according to testing scripts).
