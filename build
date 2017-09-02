@@ -1,3 +1,6 @@
 #!/bin/bash
-mvn clean install
-mvn package
+if [ "$1" == 'clean' ]; then
+    rm -f process
+else
+    go build -o process server.go
+fi
