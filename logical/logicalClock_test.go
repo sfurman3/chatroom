@@ -92,3 +92,30 @@ func TestCmpZeroToClock(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestSet(t *testing.T) {
+	clk := new(Clock)
+	other, _ := new(Clock).SetString("100", 10)
+	if clk.Set(other) != clk || clk.String() != "100" {
+		t.Fail()
+	}
+}
+
+func TestCmpOffset(t *testing.T) {
+	var clk, other Clock
+	if !(clk.CmpOffset(0, &other) == 0) {
+		t.Fatal()
+	}
+
+	if !(clk.CmpOffset(+1, &other) == 1) {
+		t.Fatal()
+	}
+
+	if !(clk.CmpOffset(-1, &other) == -1) {
+		t.Fatal()
+	}
+
+	if !(clk.String() == "0") {
+		t.Fatal()
+	}
+}

@@ -1,10 +1,9 @@
-// Logical clocks and operations
+// Package logical implements logical clocks and their operations
 package logical
 
 import "math/big"
 
-var ZERO = new(big.Int)
-var ONE = big.NewInt(1)
+var one = big.NewInt(1)
 
 // A Clock represents a logical clock
 //
@@ -13,7 +12,7 @@ type Clock struct {
 	counter *big.Int
 }
 
-// Value returns a text representation of the clock value in the given base
+// Text returns a text representation of the clock value in the given base
 func (clk *Clock) Text(base int) string {
 	if clk.counter == nil {
 		clk.counter = new(big.Int)
@@ -29,15 +28,16 @@ func (clk *Clock) String() string {
 	return clk.counter.String()
 }
 
-// Tick increments the Clock by 1
-func (clk *Clock) Tick() {
+// Tick increments the Clock by 1 and returns clk
+func (clk *Clock) Tick() *Clock {
 	if clk.counter == nil {
 		clk.counter = new(big.Int)
 	}
-	clk.counter.Add(clk.counter, ONE)
+	clk.counter.Add(clk.counter, one)
+	return clk
 }
 
-// Cmp compares the result of cmparing clock (clk) to another clock (other)
+// Cmp returns the result of comparing clock (clk) to another clock (other)
 //
 // The result is:
 //   -1 if clk < other
@@ -53,6 +53,34 @@ func (clk *Clock) Cmp(other *Clock) int {
 	return clk.counter.Cmp(other.counter)
 }
 
+// CmpOffset adds the (potentially negative) offset to clk and then returns the
+// result of comparison with other
+//
+// clk.CmpOffset(offset, other) == (clk + offset).Cmp(other)
+func (clk *Clock) CmpOffset(offset int64, other *Clock) int {
+	if clk.counter == nil {
+		clk.counter = new(big.Int)
+	}
+	bigOffset := big.NewInt(offset)
+	clk.counter.Add(clk.counter, bigOffset)
+	result := clk.Cmp(other)
+	clk.counter.Add(clk.counter, bigOffset.Neg(bigOffset))
+
+	return result
+}
+
+// Sets clk to other and returns clk
+func (clk *Clock) Set(other *Clock) *Clock {
+	if clk.counter == nil {
+		clk.counter = new(big.Int)
+	}
+	if other.counter == nil {
+		other.counter = new(big.Int)
+	}
+	clk.counter.Set(other.counter)
+	return clk
+}
+
 // SetString sets the clock to the value specified in the given base, which
 // must be a natural number (i.e. n >= 0), returning the clock and boolean
 // indicating success
@@ -60,7 +88,7 @@ func (clk *Clock) Cmp(other *Clock) int {
 // If the operation fails, the clock value is unchanged
 func (clk *Clock) SetString(value string, base int) (*Clock, bool) {
 	newValue, succ := new(big.Int).SetString(value, base)
-	if succ && newValue.Cmp(ZERO) != -1 {
+	if succ && newValue.Sign() != -1 {
 		clk.counter = newValue
 		return clk, true
 	}
@@ -75,7 +103,8 @@ func (clk *Clock) Max(other *Clock) *Clock {
 	return clk
 }
 
-// TickReceive sets the Clock to max{clk, other} + 1
-func (clk *Clock) TickReceive(other *Clock) {
+// TickReceive sets the Clock to max{clk, other} + 1 and returns clk
+func (clk *Clock) TickReceive(other *Clock) *Clock {
 	clk.Max(other).Tick()
+	return clk
 }
