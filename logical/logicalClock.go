@@ -21,6 +21,14 @@ func (clk *Clock) Text(base int) string {
 	return clk.counter.Text(base)
 }
 
+// String returns a base 10 string representation of the clock's value
+func (clk *Clock) String() string {
+	if clk.counter == nil {
+		clk.counter = new(big.Int)
+	}
+	return clk.counter.String()
+}
+
 // Tick increments the Clock by 1
 func (clk *Clock) Tick() {
 	if clk.counter == nil {
@@ -30,7 +38,6 @@ func (clk *Clock) Tick() {
 }
 
 // Cmp compares the result of cmparing clock (clk) to another clock (other)
-//
 //
 // The result is:
 //   -1 if clk < other
@@ -60,13 +67,15 @@ func (clk *Clock) SetString(value string, base int) (*Clock, bool) {
 	return clk, false
 }
 
+// Max sets clk to the maximum of clk or other and returns clk
+func (clk *Clock) Max(other *Clock) *Clock {
+	if clk.Cmp(other) < 0 {
+		clk.counter.Set(other.counter)
+	}
+	return clk
+}
+
 // TickReceive sets the Clock to max{clk, other} + 1
 func (clk *Clock) TickReceive(other *Clock) {
-	switch clk.Cmp(other) {
-	case 0, 1:
-		clk.Tick()
-	case -1:
-		// NOTE: other.counter != nil because of the call to clk.Cmp
-		clk.counter.Add(other.counter, ONE)
-	}
+	clk.Max(other).Tick()
 }
