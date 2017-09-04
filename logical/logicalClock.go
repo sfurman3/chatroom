@@ -7,7 +7,7 @@ var one = big.NewInt(1)
 
 // A Clock represents a logical clock
 //
-// The zero value for Clock is a zeroed clock ready to use.
+// The zero value for Clock is a zeroed clock ready to use
 type Clock struct {
 	counter *big.Int
 }
@@ -29,12 +29,11 @@ func (clk *Clock) String() string {
 }
 
 // Tick increments the Clock by 1 and returns clk
-func (clk *Clock) Tick() *Clock {
+func (clk *Clock) Tick() {
 	if clk.counter == nil {
 		clk.counter = new(big.Int)
 	}
 	clk.counter.Add(clk.counter, one)
-	return clk
 }
 
 // Cmp returns the result of comparing clock (clk) to another clock (other)
@@ -104,7 +103,6 @@ func (clk *Clock) Max(other *Clock) *Clock {
 }
 
 // TickReceive sets the Clock to max{clk, other} + 1 and returns clk
-func (clk *Clock) TickReceive(other *Clock) *Clock {
+func (clk *Clock) TickReceive(other *Clock) {
 	clk.Max(other).Tick()
-	return clk
 }
