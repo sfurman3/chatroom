@@ -42,7 +42,7 @@ class ClientHandler(Thread):
                     sys.stdout.flush()
                     wait_ack = False
                 else:
-                    print "Invalid Response: " + s
+                    print "Invalid Response: " + l
             else:
                 try:
                     data = self.sock.recv(1024)
