@@ -165,8 +165,9 @@ func setArgsPositional() {
 	getIntArg := func(i int) int {
 		arg := flag.Arg(i)
 		if arg == "" {
-			fmt.Fprintln(os.Stderr, os.Args)
-			fmt.Fprintln(os.Stderr, "missing one or more arguments\n")
+			fmt.Fprintf(os.Stderr,
+				"%v: missing one or more arguments (there are %d)\n",
+				os.Args, len(REQUIRED_ARGUMENTS))
 			flag.PrintDefaults()
 			os.Exit(1)
 		}
