@@ -3,6 +3,9 @@ package logical
 
 import "math/big"
 
+// MaxBase is the largest number base accepted for string conversions
+const MaxBase = big.MaxBase
+
 var one = big.NewInt(1)
 
 // A Clock represents a logical clock
