@@ -1,6 +1,7 @@
 package vector
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -59,4 +60,51 @@ func ExampleVectorClock() {
 	vecClock, _ := ts.VectorClock(10)
 	fmt.Println(vecClock)
 	// Output: [9, 10, 11, 12]
+}
+
+func ExampleLessThan() {
+	clkA, _ := NewClock().Id(1).Length(3).Build()
+	clkB, _ := NewClock().Id(3).Length(3).Build()
+	clkA.TickLocal() // [1, 0, 0]
+	clkB.TickLocal() // [0, 0, 1]
+
+	fmt.Println("[1, 0, 0] < [0, 0, 1]:", clkA.LessThan(clkB))
+	fmt.Println("[0, 0, 1] < [1, 0, 0]:", clkB.LessThan(clkA))
+
+	clkB.TickReceive(clkA) // clkB: [1, 0, 2]
+	fmt.Println("[1, 0, 0] < [1, 0, 2]:", clkA.LessThan(clkB))
+	fmt.Println("[1, 0, 2] < [1, 0, 0]:", clkB.LessThan(clkA))
+	// Output:
+	// [1, 0, 0] < [0, 0, 1]: false
+	// [0, 0, 1] < [1, 0, 0]: false
+	// [1, 0, 0] < [1, 0, 2]: true
+	// [1, 0, 2] < [1, 0, 0]: false
+}
+
+func ExampleConcurrent() {
+	clkA, _ := NewClock().Id(1).Length(3).Build()
+	clkB, _ := NewClock().Id(3).Length(3).Build()
+	clkA.TickLocal() // [1, 0, 0]
+	clkB.TickLocal() // [0, 0, 1]
+
+	fmt.Println(clkA.Concurrent(clkB))
+	// Output: true
+}
+
+func ExampleMessage() {
+	message := Message{
+		Content: "didgeridoo",
+		Timestamp: Timestamp{
+			Id:     1,
+			Vector: []string{"0", "0", "1"},
+		},
+	}
+	b, _ := json.Marshal(message)
+	fmt.Println(string(b))
+
+	msgData := []byte(`{"msg":"didgeridoo","ts":{"id":1,"v":["0","0","1"]}}`)
+	fmt.Println("bytes.Equal(b, msgData):", bytes.Equal(b, msgData))
+	// Output:
+	// {"msg":"didgeridoo","ts":{"id":1,"v":["0","0","1"]}}
+	// bytes.Equal(b, msgData): true
 }
