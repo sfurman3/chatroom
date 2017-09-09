@@ -24,7 +24,7 @@ for file in $files; do
     if [ "$?" != 0 ]; then
         echo FAILURE: $file.input
         echo GOT:
-        echo $output | nl
+        echo "$output" | nl
         echo
         echo WANT:
         cat $testdir$file'.output' | nl
