@@ -3,6 +3,7 @@
 // TODO: Cite the paper: "Consistent Global States of Distributed Systems": by
 // Özalp Babaoğlu and Keith Marzullo.
 
+// TODO: REORGANIZE
 // Concepts & Terminology:
 // -----------------------
 // - "distributed system"
@@ -14,9 +15,11 @@
 //     construct global states
 //
 // - "events": we define 3 possible events
-//   1. local events
-//   2. send(m)         (send events)
-//   3. receive(m)      (receive events)
+//    1. local events
+//    2. send(m)         (send events)
+//    3. receive(m)      (receive events)
+//
+//    NOTE: monitoring does not generate any new events
 //
 //   + e_i^n ::= the n'th event of process p_i
 //
@@ -68,11 +71,19 @@
 //   + the 'event' of a message arriving at its destination (but before it is
 //     passed to the recipient process)
 //
+// TODO: IMPORTANT
 // - "observation" (of a distributed computation by a "monitor" process)
-//   + the sequence of events corresponding to the order in which the
-//     notification messages arrive
-//   + any permutation of a run is a possible observation of it
+//   + a permutation of a subset of a run, which can thus be consistent OR
+//     inconsistent
 //   + a "consistent observation" MUST correspond to a consistent run
+//   + observations are constructed by monitors from events received from
+//     processes in a system
+//   + NOTE: we can use consistent observations to construct consistent global
+//     states
+//     * because consistent observations correspond to consistent runs,
+//       consistent runs can be used to construct consistent cuts, and
+//       consistent cuts have frontiers that correspond to consistent global
+//       states
 //
 // - "deliver"
 //   + the _act_ of presenting received messages to a process
@@ -80,6 +91,8 @@
 //
 // - "causal delivery"
 //   + send_i(m) -> send_j(m) => receive_i(m) -> receive_j(m)
+//   + the property of delivering messages in an order that preserves causal
+//     precedence (i.e. that yields consistent observations)
 //
 // - "clock condition":
 //   + e' -> e => C(e') -> C(e)    (C(e) is the clock timestamp of event e)
@@ -127,36 +140,291 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
+	"net"
 	"os"
 	"strconv"
-
-	"github.com/sfurman3/chatroom/logical"
+	"strings"
+	"sync"
+	"time"
 )
 
+const (
+	// Base port for servers in the system
+	// Port numbers are always START_PORT + ID
+	START_PORT = 20000
+
+	// Duration between heartbeat messages (i.e. empty messages broadcasted
+	// to other servers to indicate the server is alive)
+	HEARTBEAT_INTERVAL = 500 * time.Millisecond
+
+	// Constants for printing error messages to the terminal
+	BOLD_RED = "\033[31;1m"
+	NO_STYLE = "\033[0m"
+	ERROR    = "[" + BOLD_RED + "ERROR" + NO_STYLE + "]"
+)
+
+// Message represents a message sent from one server to another
 type Message struct {
-	SenderId  int           // process id of the sender
-	timestamp logical.Clock // timestamp of the send event
+	Id      int       `json:"id"`  // server id
+	Rts     time.Time `json:"rts"` // real-time timestamp
+	Content string    `json:"msg"` // content of the message
 }
 
 var (
-	ID                 = -1 // id of the process {0, ..., NUM_PROCS-1}
-	NUM_PROCS          = -1 // total number of processes
-	PORT               = -1 // number of the master-facing port
-	REQUIRED_ARGUMENTS = []*int{&ID, &NUM_PROCS, &PORT}
+	ID                 = -1 // id of the server {0, ..., NUM_PROCS-1}
+	NUM_PROCS          = -1 // total number of servers
+	MASTER_PORT        = -1 // number of the master-facing port
+	REQUIRED_ARGUMENTS = []*int{&ID, &NUM_PROCS, &MASTER_PORT}
+
+	PORT = -1 // server's port number
+
+	MessagesFIFO struct { // all received messages in FIFO order
+		value []*Message
+		mutex sync.Mutex // mutex for accessing contents
+	}
+
+	LastTimestamp struct { // timestamp of last message from each server
+		value []time.Time
+		mutex sync.Mutex // mutex for accessing contents
+	}
 )
 
 func init() {
-	flag.IntVar(&ID, "id", ID, "id of the process {0, ..., n-1}")
-	flag.IntVar(&NUM_PROCS, "n", NUM_PROCS, "total number of processes")
-	flag.IntVar(&PORT, "port", PORT, "number of the master-facing port")
+	flag.IntVar(&ID, "id", ID, "id of the server {0, ..., n-1}")
+	flag.IntVar(&NUM_PROCS, "n", NUM_PROCS, "total number of servers")
+	flag.IntVar(&MASTER_PORT, "port", MASTER_PORT, "number of the "+
+		"master-facing port")
 	flag.Parse()
 
 	setArgsPositional()
+
+	PORT = START_PORT + ID
 }
 
+// TODO: MOVE?
+// TODO:NOTE: IDs used by data structures and functions in the vector package are
+// always the server ID plus 1.
+
+// Error logs the given error
+func Error(err ...interface{}) {
+	log.Println(ERROR, err)
+}
+
+// Fail logs the given error and exits with status 1
+func Fatal(err ...interface{}) {
+	log.Fatalln(ERROR, err)
+}
+
+// TODO: YOU NEED THREAD SAFE CODE
+// TODO: TURN OFF LOGGING
 func main() {
+	// TODO: Receipt times can be stored in a map from messages to timestamps
+	// TODO: In order to maintain FIFO ordering, store each received
+	// message in a FIFO slice log of messages
+	// TODO: Maintain a message receptacle of received messages; for every
+	// receive: add it to the receptacle, if successful store it in the
+	// FIFO slice
+
+	// TODO: heartbeat should be less than 1 second, shouldn't be too long
+	// Too short and congestion
+	// Too long and you don't know for a while whether or not the server is
+	// alive
+
+	// --------------------------------------------------
+	// TODO: Synchronize servers
+	// TODO: Synchronize message delivery
+	go serveMaster()
+	go fetchMessages()
+	heartbeat() // TODO
+}
+
+func heartbeat() {
+	for {
+		time.Sleep(HEARTBEAT_INTERVAL)
+		go broadcast(emptyMessage())
+	}
+}
+
+func emptyMessage() *Message {
+	return &Message{
+		Id:  ID,
+		Rts: time.Now(),
+	}
+}
+
+func newMessage(msg string) *Message {
+	return &Message{
+		Id:      ID,
+		Rts:     time.Now(),
+		Content: msg,
+	}
+}
+
+func fetchMessages() {
+	// Bind the server-facing port and listen for messages
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(PORT))
+	if err != nil {
+		Fatal("failed to open server-facing port:", strconv.Itoa(PORT))
+	}
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			continue
+		}
+
+		go handleMessenger(conn)
+	}
+}
+
+// TODO
+func handleMessenger(conn net.Conn) {
+	defer conn.Close()
+
+	messenger := bufio.NewReader(conn)
+	msg := new(Message)
+	msgBytes, err := messenger.ReadBytes('\n')
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(msgBytes, msg)
+	if err != nil {
+		return
+	}
+
+	// Update the heartbeat metadata
+	// NOTE: assumes message IDs are in {0..n-1}
+	LastTimestamp.mutex.Lock()
+	LastTimestamp.value[msg.Id] = msg.Rts
+	LastTimestamp.mutex.Unlock()
+
+	if msg.Content == "" { // msg is an empty message
+		return
+	}
+
+	// TODO: synchronize
+	MessagesFIFO.mutex.Lock()
+	MessagesFIFO.value = append(MessagesFIFO.value, msg)
+	MessagesFIFO.mutex.Unlock()
+}
+
+// TODO
+func serveMaster() {
+	// Bind the master-facing port and start listen for commands
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(MASTER_PORT))
+	if err != nil {
+		Fatal("failed to open master-facing port:",
+			strconv.Itoa(MASTER_PORT))
+	}
+
+	masterConn, err := ln.Accept()
+	if err != nil {
+		Fatal(err)
+	}
+	defer masterConn.Close()
+
+	buff := bytes.NewBuffer(make([]byte, NUM_PROCS))
+	for {
+		rdr := bufio.NewReader(masterConn)
+		wrtr := bufio.NewWriter(masterConn)
+		master := bufio.NewReadWriter(rdr, wrtr)
+
+		command, err := master.ReadString('\n')
+		if err != nil {
+			Fatal(err)
+		}
+
+		command = strings.TrimSpace(command)
+		switch command {
+		case "get":
+			MessagesFIFO.mutex.Lock()
+			for _, msg := range MessagesFIFO.value {
+				buff.WriteString(msg.Content)
+				buff.WriteByte(',')
+			}
+			MessagesFIFO.mutex.Unlock()
+			b := buff.Bytes()
+			if b[len(b)-1] == ',' {
+				b = b[:len(b)-1]
+			}
+			buff.Reset()
+
+			master.WriteString("messages ")
+			master.Write(b)
+			master.WriteByte('\n')
+			err = master.Flush()
+			if err != nil {
+				Fatal(err)
+			}
+		case "alive":
+			now := time.Now()
+			LastTimestamp.mutex.Lock()
+			for id, ts := range LastTimestamp.value {
+				if now.Sub(ts) < HEARTBEAT_INTERVAL {
+					buff.WriteString(strconv.Itoa(id))
+					buff.WriteByte(',')
+				}
+			}
+			LastTimestamp.mutex.Unlock()
+			b := buff.Bytes()
+			if b[len(b)-1] == ',' {
+				b = b[:len(b)-1]
+			}
+			buff.Reset()
+
+			master.WriteString("alive ")
+			master.Write(b)
+			master.WriteByte('\n')
+			err = master.Flush()
+			if err != nil {
+				Fatal(err)
+			}
+		default:
+			broadcastComm := "broadcast "
+			if !strings.HasPrefix(command, broadcastComm) {
+				Error(fmt.Errorf(
+					"unrecognized command: \"%s\"\n",
+					command))
+				continue
+			}
+
+			message := command[len(broadcastComm):]
+			broadcast(newMessage(message))
+		}
+	}
+}
+
+// TODO
+// NOTE: Does not require synchronization
+func broadcast(msg *Message) {
+	for id := 0; id < NUM_PROCS; id++ {
+		conn, err := net.Dial("tcp", ":"+strconv.Itoa(START_PORT+id))
+		if err != nil {
+			continue
+		}
+		defer conn.Close()
+
+		wrtr := bufio.NewWriter(conn)
+		msgBytes, err := json.Marshal(msg)
+		_, err = wrtr.Write(msgBytes)
+		if err != nil {
+			continue
+		}
+
+		err = wrtr.WriteByte('\n')
+		if err != nil {
+			continue
+		}
+
+		_ = wrtr.Flush()
+	}
 }
 
 // If no arguments were provided via flags, parse the first three arguments
@@ -165,8 +433,8 @@ func setArgsPositional() {
 	getIntArg := func(i int) int {
 		arg := flag.Arg(i)
 		if arg == "" {
-			fmt.Fprintf(os.Stderr,
-				"%v: missing one or more arguments (there are %d)\n",
+			fmt.Fprintf(os.Stderr, "%v: missing one or more "+
+				"arguments (there are %d)\n",
 				os.Args, len(REQUIRED_ARGUMENTS))
 			flag.PrintDefaults()
 			os.Exit(1)
