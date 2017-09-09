@@ -1,0 +1,39 @@
+#!/bin/bash
+trap ctrl_c INT
+function ctrl_c() {
+        ./stopall
+}
+
+files=$(python -c "
+from os import listdir
+from os.path import isfile, join
+import os
+
+testdir = './tests/'
+files = map(lambda x: x[:x.find('.input')], [f for f in listdir(testdir)
+        if isfile(join(testdir, f)) and f.find('.input') > -1])
+print ' '.join(files)")
+
+testdir='./tests/'
+
+./build
+
+for file in $files; do
+    output="$(./master.py < $testdir$file'.input')"
+    diff=$(colordiff -s <(echo "$output") $testdir$file'.output')
+    if [ "$?" != 0 ]; then
+        echo FAILURE: $file.input
+        echo GOT:
+        echo $output | nl
+        echo
+        echo WANT:
+        cat $testdir$file'.output' | nl
+        echo
+        echo "$diff"
+        exit 1
+    fi
+    echo PASS: $file.input
+done
+
+echo -----------------------
+echo SUCCESS: All tests pass
