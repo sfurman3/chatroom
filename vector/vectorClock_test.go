@@ -251,6 +251,7 @@ func TestMessageReceptacle_NewMessageReceptacle(t *testing.T) {
 	_ = json.Unmarshal(msg1Bytes, p0Receipt)
 	_ = rcp.Receive(p0Receipt)
 	// check the state of rcp
+	// NOTE: sometimes fails because of the order of values in rcp.received
 	if rcp.Length() != 2 {
 		t.Fatal("length should be 2")
 	}

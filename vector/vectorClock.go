@@ -162,8 +162,8 @@ func (rcp *MessageReceptacle) Length() int {
 // NOTE: If an error is encountered, the returned slice may still contain
 // deliverable messages, so DON'T THROW IT AWAY!
 //
-// NOTE: Deliverables may check all received messages so it has a worst
-// case time complexity of O(n). Try to avoid calling it often.
+// NOTE: Deliverables checks all received messages so it has a time complexity
+// of O(n). Try to avoid calling it often.
 func (rcp *MessageReceptacle) Deliverables() ([]*Message, error, *Message) {
 	var delivery []*Message
 	for msg, ts := range rcp.received {
