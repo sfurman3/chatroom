@@ -249,8 +249,8 @@ func main() {
 
 func heartbeat() {
 	for {
-		time.Sleep(HEARTBEAT_INTERVAL)
 		go broadcast(emptyMessage())
+		time.Sleep(HEARTBEAT_INTERVAL)
 	}
 }
 
