@@ -184,12 +184,14 @@ var (
 
 	PORT = -1 // server's port number
 
-	MessagesFIFO struct { // all received messages in FIFO order
+	// struct containing all received messages in FIFO order
+	MessagesFIFO struct {
 		value []*Message
 		mutex sync.Mutex // mutex for accessing contents
 	}
 
-	LastTimestamp struct { // timestamp of last message from each server
+	// struct containing the timestamp of the last message from each server
+	LastTimestamp struct {
 		value []time.Time
 		mutex sync.Mutex // mutex for accessing contents
 	}
@@ -205,6 +207,7 @@ func init() {
 	setArgsPositional()
 
 	PORT = START_PORT + ID
+	LastTimestamp.value = make([]time.Time, NUM_PROCS)
 }
 
 // TODO: MOVE?
@@ -270,7 +273,7 @@ func fetchMessages() {
 	// Bind the server-facing port and listen for messages
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(PORT))
 	if err != nil {
-		Fatal("failed to open server-facing port:", strconv.Itoa(PORT))
+		Fatal("failed to bind server-facing port:", strconv.Itoa(PORT))
 	}
 
 	for {
@@ -305,11 +308,10 @@ func handleMessenger(conn net.Conn) {
 	LastTimestamp.value[msg.Id] = msg.Rts
 	LastTimestamp.mutex.Unlock()
 
-	if msg.Content == "" { // msg is an empty message
+	if len(msg.Content) == 0 { // msg is an empty message
 		return
 	}
 
-	// TODO: synchronize
 	MessagesFIFO.mutex.Lock()
 	MessagesFIFO.value = append(MessagesFIFO.value, msg)
 	MessagesFIFO.mutex.Unlock()
@@ -320,7 +322,7 @@ func serveMaster() {
 	// Bind the master-facing port and start listen for commands
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(MASTER_PORT))
 	if err != nil {
-		Fatal("failed to open master-facing port:",
+		Fatal("failed to bind master-facing port:",
 			strconv.Itoa(MASTER_PORT))
 	}
 
@@ -331,14 +333,14 @@ func serveMaster() {
 	defer masterConn.Close()
 
 	buff := bytes.NewBuffer(make([]byte, NUM_PROCS))
-	for {
-		rdr := bufio.NewReader(masterConn)
-		wrtr := bufio.NewWriter(masterConn)
-		master := bufio.NewReadWriter(rdr, wrtr)
+	rdr := bufio.NewReader(masterConn)
+	wrtr := bufio.NewWriter(masterConn)
+	master := bufio.NewReadWriter(rdr, wrtr)
 
+	for {
 		command, err := master.ReadString('\n')
 		if err != nil {
-			Fatal(err)
+			Fatal("master may have been terminated")
 		}
 
 		command = strings.TrimSpace(command)
@@ -351,7 +353,7 @@ func serveMaster() {
 			}
 			MessagesFIFO.mutex.Unlock()
 			b := buff.Bytes()
-			if b[len(b)-1] == ',' {
+			if len(b) != 0 && b[len(b)-1] == ',' {
 				b = b[:len(b)-1]
 			}
 			buff.Reset()
@@ -367,14 +369,14 @@ func serveMaster() {
 			now := time.Now()
 			LastTimestamp.mutex.Lock()
 			for id, ts := range LastTimestamp.value {
-				if now.Sub(ts) < HEARTBEAT_INTERVAL {
+				if now.Sub(ts) < HEARTBEAT_INTERVAL || id == ID {
 					buff.WriteString(strconv.Itoa(id))
 					buff.WriteByte(',')
 				}
 			}
 			LastTimestamp.mutex.Unlock()
 			b := buff.Bytes()
-			if b[len(b)-1] == ',' {
+			if len(b) != 0 && b[len(b)-1] == ',' {
 				b = b[:len(b)-1]
 			}
 			buff.Reset()
@@ -390,7 +392,7 @@ func serveMaster() {
 			broadcastComm := "broadcast "
 			if !strings.HasPrefix(command, broadcastComm) {
 				Error(fmt.Errorf(
-					"unrecognized command: \"%s\"\n",
+					"unrecognized command: \"%s\"",
 					command))
 				continue
 			}
@@ -404,7 +406,19 @@ func serveMaster() {
 // TODO
 // NOTE: Does not require synchronization
 func broadcast(msg *Message) {
+	// send non-empty messages to self
+	if len(msg.Content) != 0 {
+		MessagesFIFO.mutex.Lock()
+		MessagesFIFO.value = append(MessagesFIFO.value, msg)
+		MessagesFIFO.mutex.Unlock()
+	}
+
+	// send message to other servers
 	for id := 0; id < NUM_PROCS; id++ {
+		if id == ID {
+			id++
+		}
+
 		conn, err := net.Dial("tcp", ":"+strconv.Itoa(START_PORT+id))
 		if err != nil {
 			continue
@@ -441,8 +455,7 @@ func setArgsPositional() {
 		}
 		val, err := strconv.Atoi(arg)
 		if err != nil {
-			fmt.Printf("could not parse: '%v' into an integer\n", arg)
-			os.Exit(1)
+			log.Fatal("could not parse: '%v' into an integer\n", arg)
 		}
 		return val
 	}
