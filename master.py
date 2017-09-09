@@ -49,7 +49,7 @@ class ClientHandler(Thread):
                     # sys.stderr.write(data)
                     self.buffer += data
                 except:
-                    print sys.exc_info()
+                    # print sys.exc_info()
                     self.valid = False
                     del threads[self.index]
                     self.sock.close()
