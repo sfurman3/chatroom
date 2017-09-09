@@ -2,5 +2,5 @@
 if [ "$1" == 'clean' ]; then
     rm -f process
 else
-    go build -o process server.go
+    go build -o process ./server/server.go
 fi
