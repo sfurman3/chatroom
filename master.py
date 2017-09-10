@@ -131,6 +131,7 @@ def timeout():
 def main(debug=False):
     global threads, wait_ack
     timeout_thread = Thread(target=timeout, args=())
+    timeout_thread.setDaemon(True)
     timeout_thread.start()
 
     while True:
@@ -139,9 +140,13 @@ def main(debug=False):
             line = sys.stdin.readline()
         except:  # keyboard exception, such as Ctrl+C/D
             exit(True)
+
         if line == '':  # end of a file
             exit()
+
         line = line.strip()  # remove trailing '\n'
+        if line == '': # prompt again if just whitespace
+            continue
 
         if line == 'exit':  # exit when reading 'exit' command
             exit()
@@ -150,15 +155,24 @@ def main(debug=False):
         sp2 = line.split()
         if len(sp1) != 2:  # validate input
             print "Invalid command: " + line
+            continue
 
         if sp1[0] == 'sleep':  # sleep command
             time.sleep(int(sp1[1]) / 1000)
             continue
 
-        pid = int(sp2[0])  # first field is pid
+        try:
+            pid = int(sp2[0])  # first field is pid
+        except ValueError:
+            print "Invalid pid: " + sp2[0]
+            continue
         cmd = sp2[1]  # second field is command
         if cmd == 'start':
-            port = int(sp2[3])
+            try:
+                port = int(sp2[3])
+            except ValueError:
+                print "Invalid port: " + sp2[3]
+                continue
             if debug:
                 process = subprocess.Popen(['./process', str(pid), sp2[2], sp2[3]], preexec_fn=os.setsid)
             else:
