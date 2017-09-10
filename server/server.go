@@ -141,7 +141,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -206,6 +205,10 @@ func init() {
 
 	setArgsPositional()
 
+	if NUM_PROCS <= 0 {
+		Fatal("invalid number of servers: ", NUM_PROCS)
+	}
+
 	PORT = START_PORT + ID
 	LastTimestamp.value = make([]time.Time, NUM_PROCS)
 }
@@ -216,12 +219,12 @@ func init() {
 
 // Error logs the given error
 func Error(err ...interface{}) {
-	log.Println(ERROR, err)
+	log.Println(ERROR + " " + fmt.Sprint(err...))
 }
 
 // Fail logs the given error and exits with status 1
 func Fatal(err ...interface{}) {
-	log.Fatalln(ERROR, err)
+	log.Fatalln(ERROR + " " + fmt.Sprint(err...))
 }
 
 // TODO: YOU NEED THREAD SAFE CODE
@@ -240,11 +243,14 @@ func main() {
 	// alive
 
 	// --------------------------------------------------
-	// TODO: Synchronize servers
-	// TODO: Synchronize message delivery
+	// Bind the master-facing and server-facing ports and start listening
 	go serveMaster()
 	go fetchMessages()
-	heartbeat() // TODO
+
+	// Sleep for a bit to let other servers set up server-facing ports
+	// before delivering the first heartbeat
+	time.Sleep(100 * time.Millisecond)
+	heartbeat()
 }
 
 func heartbeat() {
@@ -273,7 +279,7 @@ func fetchMessages() {
 	// Bind the server-facing port and listen for messages
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(PORT))
 	if err != nil {
-		Fatal("failed to bind server-facing port:", strconv.Itoa(PORT))
+		Fatal("failed to bind server-facing port: ", strconv.Itoa(PORT))
 	}
 
 	for {
@@ -322,7 +328,7 @@ func serveMaster() {
 	// Bind the master-facing port and start listen for commands
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(MASTER_PORT))
 	if err != nil {
-		Fatal("failed to bind master-facing port:",
+		Fatal("failed to bind master-facing port: ",
 			strconv.Itoa(MASTER_PORT))
 	}
 
@@ -332,10 +338,9 @@ func serveMaster() {
 	}
 	defer masterConn.Close()
 
-	buff := bytes.NewBuffer(make([]byte, NUM_PROCS))
-	rdr := bufio.NewReader(masterConn)
-	wrtr := bufio.NewWriter(masterConn)
-	master := bufio.NewReadWriter(rdr, wrtr)
+	master := bufio.NewReadWriter(
+		bufio.NewReader(masterConn),
+		bufio.NewWriter(masterConn))
 
 	for {
 		command, err := master.ReadString('\n')
@@ -346,44 +351,50 @@ func serveMaster() {
 		command = strings.TrimSpace(command)
 		switch command {
 		case "get":
+			master.WriteString("messages ")
 			MessagesFIFO.mutex.Lock()
-			for _, msg := range MessagesFIFO.value {
-				buff.WriteString(msg.Content)
-				buff.WriteByte(',')
+			if len(MessagesFIFO.value) > 0 {
+				msgs := MessagesFIFO.value
+				lst := len(msgs) - 1
+				for _, msg := range msgs[:lst] {
+					master.WriteString(msg.Content)
+					master.WriteByte(',')
+				}
+				master.WriteString(msgs[lst].Content)
 			}
 			MessagesFIFO.mutex.Unlock()
-			b := buff.Bytes()
-			if len(b) != 0 && b[len(b)-1] == ',' {
-				b = b[:len(b)-1]
-			}
-			buff.Reset()
-
-			master.WriteString("messages ")
-			master.Write(b)
 			master.WriteByte('\n')
+
 			err = master.Flush()
 			if err != nil {
 				Fatal(err)
 			}
 		case "alive":
 			now := time.Now()
+
+			master.WriteString("alive ")
 			LastTimestamp.mutex.Lock()
-			for id, ts := range LastTimestamp.value {
-				if now.Sub(ts) < HEARTBEAT_INTERVAL || id == ID {
-					buff.WriteString(strconv.Itoa(id))
-					buff.WriteByte(',')
+			{
+				stmps := LastTimestamp.value
+				lst := len(stmps) - 1
+				for id, ts := range stmps[:lst] {
+					// add all server ids for which a
+					// heartbeat was sent within the
+					// heartbeat interval
+					if now.Sub(ts) < HEARTBEAT_INTERVAL ||
+						id == ID {
+						master.WriteString(strconv.Itoa(id))
+						master.WriteByte(',')
+					}
+				}
+				if now.Sub(stmps[lst]) < HEARTBEAT_INTERVAL ||
+					lst == ID {
+					master.WriteString(strconv.Itoa(lst))
 				}
 			}
 			LastTimestamp.mutex.Unlock()
-			b := buff.Bytes()
-			if len(b) != 0 && b[len(b)-1] == ',' {
-				b = b[:len(b)-1]
-			}
-			buff.Reset()
-
-			master.WriteString("alive ")
-			master.Write(b)
 			master.WriteByte('\n')
+
 			err = master.Flush()
 			if err != nil {
 				Fatal(err)
@@ -391,9 +402,7 @@ func serveMaster() {
 		default:
 			broadcastComm := "broadcast "
 			if !strings.HasPrefix(command, broadcastComm) {
-				Error(fmt.Errorf(
-					"unrecognized command: \"%s\"",
-					command))
+				Error("unrecognized command: \"", command, "\"")
 				continue
 			}
 
@@ -406,6 +415,13 @@ func serveMaster() {
 // TODO
 // NOTE: Does not require synchronization
 func broadcast(msg *Message) {
+	// Convert to JSON
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	msgJSON := string(msgBytes)
+
 	// send non-empty messages to self
 	if len(msg.Content) != 0 {
 		MessagesFIFO.mutex.Lock()
@@ -425,19 +441,7 @@ func broadcast(msg *Message) {
 		}
 		defer conn.Close()
 
-		wrtr := bufio.NewWriter(conn)
-		msgBytes, err := json.Marshal(msg)
-		_, err = wrtr.Write(msgBytes)
-		if err != nil {
-			continue
-		}
-
-		err = wrtr.WriteByte('\n')
-		if err != nil {
-			continue
-		}
-
-		_ = wrtr.Flush()
+		fmt.Fprintln(conn, msgJSON)
 	}
 }
 
