@@ -213,6 +213,33 @@ func init() {
 	LastTimestamp.value = make([]time.Time, NUM_PROCS)
 }
 
+// If no arguments were provided via flags, parse the first three arguments
+// into ID, NUM_PROCS, and PORT respectively
+func setArgsPositional() {
+	getIntArg := func(i int) int {
+		arg := flag.Arg(i)
+		if arg == "" {
+			fmt.Fprintf(os.Stderr, "%v: missing one or more "+
+				"arguments (there are %d)\n",
+				os.Args, len(REQUIRED_ARGUMENTS))
+			flag.PrintDefaults()
+			os.Exit(1)
+		}
+		val, err := strconv.Atoi(arg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr,
+				"could not parse: '%v' into an integer\n", arg)
+		}
+		return val
+	}
+
+	for idx, val := range REQUIRED_ARGUMENTS {
+		if *val == -1 {
+			*val = getIntArg(idx)
+		}
+	}
+}
+
 // TODO: MOVE?
 // TODO:NOTE: IDs used by data structures and functions in the vector package are
 // always the server ID plus 1.
@@ -288,12 +315,30 @@ func fetchMessages() {
 			continue
 		}
 
-		go handleMessenger(conn)
+		// NOTE: This function must be called sequentially (NOT by
+		// starting a new thread for each new connection) in order
+		// to maintain FIFO receipt. Otherwise, depending on
+		// scheduling, a message B may be added to MessagesFIFO before
+		// another message A, even though A connected first.
+		//
+		// The disadvantage is that, if the delivery of a message is
+		// blocked (e.g. the sender died before it could terminate the
+		// message with a '\n'), then all of the subsequent messages
+		// to be delivered are also blocked, possibly FOREVER.
+		//
+		// NOTE: If FIFO receipt is no longer necessary, we can simply
+		// sort MessagesFIFO by send timestamp in order to approximate
+		// the send order. We could also use a causal delivery method
+		// provided by a data structure such as the
+		// vector.MessageReceptacle to deliver messages based on causal
+		// precedence.
+		handleMessage(conn)
 	}
 }
 
-// TODO
-func handleMessenger(conn net.Conn) {
+// TODO: retrieves the first message, adds it to the log, and closes the
+// connection
+func handleMessage(conn net.Conn) {
 	defer conn.Close()
 
 	messenger := bufio.NewReader(conn)
@@ -407,6 +452,26 @@ func serveMaster() {
 			}
 
 			message := command[len(broadcastComm):]
+
+			// NOTE: This function must be called sequentially (NOT
+			// by starting a new thread for each new message) in
+			// order to maintain FIFO receipt. Otherwise, depending
+			// on scheduling, a message B may be broadcast to a
+			// server before another message A, even though A's
+			// thread was started first.
+			//
+			// NOTE: If FIFO receipt is no longer necessary, the
+			// recipient can simply sort delivered messages by send
+			// timestamp in order to approximate the send order.
+			// They could also use a causal delivery method
+			// provided by a data structure such as the
+			// vector.MessageReceptacle to deliver messages based
+			// on causal precedence.
+			//
+			// The disadvantage is that, if the receipt of one
+			// message is blocked for any of its recipients, then
+			// all of the subsequence messages requested by the
+			// master are also blocked.
 			broadcast(newMessage(message))
 		}
 	}
@@ -435,6 +500,12 @@ func broadcast(msg *Message) {
 			id++
 		}
 
+		// NOTE: In the future, you may want to consider using
+		// net.DialTimeout (e.g. the recipient is so busy it cannot
+		// service the send in a reasonable amount of time) and/or
+		// consider starting a new thread for every send to prevent
+		// sends from blocking each other (the timeout might help
+		// prevent a buildup of threads that can't progress)
 		conn, err := net.Dial("tcp", ":"+strconv.Itoa(START_PORT+id))
 		if err != nil {
 			continue
@@ -442,31 +513,5 @@ func broadcast(msg *Message) {
 		defer conn.Close()
 
 		fmt.Fprintln(conn, msgJSON)
-	}
-}
-
-// If no arguments were provided via flags, parse the first three arguments
-// into ID, NUM_PROCS, and PORT respectively
-func setArgsPositional() {
-	getIntArg := func(i int) int {
-		arg := flag.Arg(i)
-		if arg == "" {
-			fmt.Fprintf(os.Stderr, "%v: missing one or more "+
-				"arguments (there are %d)\n",
-				os.Args, len(REQUIRED_ARGUMENTS))
-			flag.PrintDefaults()
-			os.Exit(1)
-		}
-		val, err := strconv.Atoi(arg)
-		if err != nil {
-			log.Fatal("could not parse: '%v' into an integer\n", arg)
-		}
-		return val
-	}
-
-	for idx, val := range REQUIRED_ARGUMENTS {
-		if *val == -1 {
-			*val = getIntArg(idx)
-		}
 	}
 }
