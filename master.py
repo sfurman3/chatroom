@@ -134,6 +134,8 @@ def main(debug=False):
     timeout_thread.start()
 
     while True:
+        sys.stdout.write("> ")
+        sys.stdout.flush()
         line = ''
         try:
             line = sys.stdin.readline()
