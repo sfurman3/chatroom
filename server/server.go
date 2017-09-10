@@ -243,8 +243,11 @@ func setArgsPositional() {
 		arg := flag.Arg(i)
 		if arg == "" {
 			fmt.Fprintf(os.Stderr, "%v: missing one or more "+
-				"arguments (there are %d)\n",
-				os.Args, len(REQUIRED_ARGUMENTS))
+				"arguments (there are %d)\n"+
+				"(e.g. \"%v 0 1 10000\" OR \"%v -id 0 -n 1 "+
+				"-port 10000)\"\n\n",
+				os.Args, len(REQUIRED_ARGUMENTS),
+				os.Args[0], os.Args[0])
 			flag.PrintDefaults()
 			os.Exit(1)
 		}
