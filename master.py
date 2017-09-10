@@ -164,10 +164,15 @@ def main(debug=False):
         try:
             pid = int(sp2[0])  # first field is pid
         except ValueError:
+            print "Invalid pid: " + sp2[0]
             continue
         cmd = sp2[1]  # second field is command
         if cmd == 'start':
-            port = int(sp2[3])
+            try:
+                port = int(sp2[3])
+            except ValueError:
+                print "Invalid port: " + sp2[3]
+                continue
             if debug:
                 process = subprocess.Popen(['./process', str(pid), sp2[2], sp2[3]], preexec_fn=os.setsid)
             else:
