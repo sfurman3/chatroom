@@ -137,6 +137,9 @@
 // - "nonstable predicates"
 // - "multiple monitors"
 
+// TODO:NOTE: IDs used by data structures and functions in the vector package are
+// always the server ID plus 1.
+
 package main
 
 import (
@@ -168,13 +171,6 @@ const (
 	ERROR    = "[" + BOLD_RED + "ERROR" + NO_STYLE + "]"
 )
 
-// Message represents a message sent from one server to another
-type Message struct {
-	Id      int       `json:"id"`  // server id
-	Rts     time.Time `json:"rts"` // real-time timestamp
-	Content string    `json:"msg"` // content of the message
-}
-
 var (
 	ID                 = -1 // id of the server {0, ..., NUM_PROCS-1}
 	NUM_PROCS          = -1 // total number of servers
@@ -196,6 +192,32 @@ var (
 	}
 )
 
+// Message represents a message sent from one server to another
+type Message struct {
+	Id      int       `json:"id"`  // server id
+	Rts     time.Time `json:"rts"` // real-time timestamp
+	Content string    `json:"msg"` // content of the message
+}
+
+// emptyMessage returns an empty message with a timestamp of time.Now()
+func emptyMessage() *Message {
+	return &Message{
+		Id:  ID,
+		Rts: time.Now(),
+	}
+}
+
+// newMessage returns a message with Content msg and a timestamp of time.Now()
+func newMessage(msg string) *Message {
+	return &Message{
+		Id:      ID,
+		Rts:     time.Now(),
+		Content: msg,
+	}
+}
+
+// init parses and validates command line arguments (by name or position) and
+// initializes global variables
 func init() {
 	flag.IntVar(&ID, "id", ID, "id of the server {0, ..., n-1}")
 	flag.IntVar(&NUM_PROCS, "n", NUM_PROCS, "total number of servers")
@@ -213,8 +235,9 @@ func init() {
 	LastTimestamp.value = make([]time.Time, NUM_PROCS)
 }
 
-// If no arguments were provided via flags, parse the first three arguments
-// into ID, NUM_PROCS, and PORT respectively
+// setArgsPositional parses the first three command line arguments into ID,
+// NUM_PROCS, and PORT respectively. It should be called if no arguments were
+// provided via flags.
 func setArgsPositional() {
 	getIntArg := func(i int) int {
 		arg := flag.Arg(i)
@@ -240,10 +263,6 @@ func setArgsPositional() {
 	}
 }
 
-// TODO: MOVE?
-// TODO:NOTE: IDs used by data structures and functions in the vector package are
-// always the server ID plus 1.
-
 // Error logs the given error
 func Error(err ...interface{}) {
 	log.Println(ERROR + " " + fmt.Sprint(err...))
@@ -254,22 +273,22 @@ func Fatal(err ...interface{}) {
 	log.Fatalln(ERROR + " " + fmt.Sprint(err...))
 }
 
-// TODO: YOU NEED THREAD SAFE CODE
-// TODO: TURN OFF LOGGING
+// TODO: Receipt times can be stored in a map from messages to timestamps
+// TODO: In order to maintain FIFO ordering, store each received
+// message in a FIFO slice log of messages
+// TODO: Maintain a message receptacle of received messages; for every
+// receive: add it to the receptacle, if successful store it in the
+// FIFO slice
+
+// TODO: Explain command line arguments: type -h for more information
+// TODO: message are delimited by '\n'
+// TODO: Give an example with netcat (in a test file?)
+// TODO: Whether a server is alive or not is determined by regularly sending a
+// heartbeat (i.e. a timestamped empty message) after a period of
+// HEARTBEAT_INTERVAL. Recipient processes use the timestamp from the last
+// received message. If it was sent after (now - HEARTBEAT_INTERVAL), then the
+// server is reported alive.
 func main() {
-	// TODO: Receipt times can be stored in a map from messages to timestamps
-	// TODO: In order to maintain FIFO ordering, store each received
-	// message in a FIFO slice log of messages
-	// TODO: Maintain a message receptacle of received messages; for every
-	// receive: add it to the receptacle, if successful store it in the
-	// FIFO slice
-
-	// TODO: heartbeat should be less than 1 second, shouldn't be too long
-	// Too short and congestion
-	// Too long and you don't know for a while whether or not the server is
-	// alive
-
-	// --------------------------------------------------
 	// Bind the master-facing and server-facing ports and start listening
 	go serveMaster()
 	go fetchMessages()
@@ -280,6 +299,8 @@ func main() {
 	heartbeat()
 }
 
+// heartbeat sleeps for HEARTBEAT_INTERVAL and broadcasts an empty message to
+// every server to indicate that the server is still alive
 func heartbeat() {
 	for {
 		go broadcast(emptyMessage())
@@ -287,21 +308,8 @@ func heartbeat() {
 	}
 }
 
-func emptyMessage() *Message {
-	return &Message{
-		Id:  ID,
-		Rts: time.Now(),
-	}
-}
-
-func newMessage(msg string) *Message {
-	return &Message{
-		Id:      ID,
-		Rts:     time.Now(),
-		Content: msg,
-	}
-}
-
+// fetchMessages retrieves messages from other servers and adds them to the
+// log, listening on PORT (i.e. START_PORT + PORT)
 func fetchMessages() {
 	// Bind the server-facing port and listen for messages
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(PORT))
@@ -315,29 +323,26 @@ func fetchMessages() {
 			continue
 		}
 
-		// NOTE: This function must be called sequentially (NOT by
-		// starting a new thread for each new connection) in order
-		// to maintain FIFO receipt. Otherwise, depending on
-		// scheduling, a message B may be added to MessagesFIFO before
-		// another message A, even though A connected first.
-		//
-		// The disadvantage is that, if the delivery of a message is
-		// blocked (e.g. the sender died before it could terminate the
-		// message with a '\n'), then all of the subsequent messages
-		// to be delivered are also blocked, possibly FOREVER.
-		//
-		// NOTE: If FIFO receipt is no longer necessary, we can simply
-		// sort MessagesFIFO by send timestamp in order to approximate
-		// the send order. We could also use a causal delivery method
-		// provided by a data structure such as the
-		// vector.MessageReceptacle to deliver messages based on causal
-		// precedence.
 		handleMessage(conn)
 	}
 }
 
-// TODO: retrieves the first message, adds it to the log, and closes the
-// connection
+// handleMessage retrieves the first message from conn, adds it to the log, and
+// closes the connection. It also updates LastTimestamp for the sending server.
+//
+// NOTE: This function must be called sequentially (NOT by starting a new
+// thread for each new connection) in order to maintain FIFO receipt.
+// Otherwise, depending on scheduling, a message B may be added to MessagesFIFO
+// before another message A, even though A connected first.
+//
+// The disadvantage is that, if the delivery of a message is blocked (e.g. the
+// sender died before it could terminate the message with a '\n'), then all of
+// the subsequent messages to be delivered are also blocked, possibly FOREVER.
+//
+// NOTE: If FIFO receipt is no longer necessary, we can simply sort
+// MessagesFIFO by send timestamp in order to approximate the send order. We
+// could also use a causal delivery method provided by a data structure such as
+// the vector.MessageReceptacle to deliver messages based on causal precedence.
 func handleMessage(conn net.Conn) {
 	defer conn.Close()
 
@@ -368,7 +373,8 @@ func handleMessage(conn net.Conn) {
 	MessagesFIFO.mutex.Unlock()
 }
 
-// TODO
+// serveMaster executes commands from the master process (listening on
+// MASTER_PORT) and returns any requested data
 func serveMaster() {
 	// Bind the master-facing port and start listen for commands
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(MASTER_PORT))
@@ -452,33 +458,33 @@ func serveMaster() {
 			}
 
 			message := command[len(broadcastComm):]
-
-			// NOTE: This function must be called sequentially (NOT
-			// by starting a new thread for each new message) in
-			// order to maintain FIFO receipt. Otherwise, depending
-			// on scheduling, a message B may be broadcast to a
-			// server before another message A, even though A's
-			// thread was started first.
-			//
-			// NOTE: If FIFO receipt is no longer necessary, the
-			// recipient can simply sort delivered messages by send
-			// timestamp in order to approximate the send order.
-			// They could also use a causal delivery method
-			// provided by a data structure such as the
-			// vector.MessageReceptacle to deliver messages based
-			// on causal precedence.
-			//
-			// The disadvantage is that, if the receipt of one
-			// message is blocked for any of its recipients, then
-			// all of the subsequence messages requested by the
-			// master are also blocked.
 			broadcast(newMessage(message))
 		}
 	}
 }
 
-// TODO
-// NOTE: Does not require synchronization
+// broadcast sends the given message to all other servers (including itself and
+// excluding the master)
+//
+// NOTE: Sends are sequential, so that broadcast does not return until an
+// attempt has been made to send the message to all servers
+//
+// NOTE: This function must be called sequentially (NOT by starting a new
+// thread for each new message) in order to maintain FIFO receipt. Otherwise,
+// depending on scheduling, a message B could be broadcast to a server before
+// another message A, even though A's thread was started first.
+//
+// The disadvantage is that, if the receipt of one message is delayed for any
+// of its recipients, then all of the subsequent commands sent by the master
+// are also delayed (until the send times out). This may cause servers to not
+// receive the message on time. This is likely not an issue when working with a
+// small number of servers.
+//
+// NOTE: If FIFO receipt is no longer necessary, the recipient can simply sort
+// delivered messages by send timestamp in order to approximate the send order.
+// They could also use a causal delivery method provided by a data structure
+// such as the vector.MessageReceptacle to deliver messages based on causal
+// precedence.
 func broadcast(msg *Message) {
 	// Convert to JSON
 	msgBytes, err := json.Marshal(msg)
