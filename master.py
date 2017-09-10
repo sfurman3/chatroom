@@ -139,9 +139,13 @@ def main(debug=False):
             line = sys.stdin.readline()
         except:  # keyboard exception, such as Ctrl+C/D
             exit(True)
+
         if line == '':  # end of a file
             exit()
+
         line = line.strip()  # remove trailing '\n'
+        if line == '': # prompt again if just whitespace
+            continue
 
         if line == 'exit':  # exit when reading 'exit' command
             exit()
@@ -155,7 +159,10 @@ def main(debug=False):
             time.sleep(int(sp1[1]) / 1000)
             continue
 
-        pid = int(sp2[0])  # first field is pid
+        try:
+            pid = int(sp2[0])  # first field is pid
+        except ValueError:
+            continue
         cmd = sp2[1]  # second field is command
         if cmd == 'start':
             port = int(sp2[3])
