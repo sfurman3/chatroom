@@ -131,6 +131,7 @@ def timeout():
 def main(debug=False):
     global threads, wait_ack
     timeout_thread = Thread(target=timeout, args=())
+    timeout_thread.setDaemon(True)
     timeout_thread.start()
 
     while True:
