@@ -156,6 +156,7 @@ def main(debug=False):
         sp2 = line.split()
         if len(sp1) != 2:  # validate input
             print "Invalid command: " + line
+            continue
 
         if sp1[0] == 'sleep':  # sleep command
             time.sleep(int(sp1[1]) / 1000)
