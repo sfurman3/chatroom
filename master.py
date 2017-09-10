@@ -107,10 +107,10 @@ def send(index, data, set_wait_ack=False):
     threads[pid].send(data)
 
 
-def exit(exit=False):
+def exit(force=False):
     global threads, wait_ack
     wait = wait_ack
-    wait = wait and (not exit)
+    wait = wait and (not force)
     while wait:
         time.sleep(0.01)
         wait = wait_ack
@@ -119,7 +119,7 @@ def exit(exit=False):
         kill(k)
     subprocess.Popen(['./stopall'], stdout=open('/dev/null', 'w'), stderr=open('/dev/null', 'w'))
     time.sleep(0.1)
-    os._exit(0)
+    sys.exit(0)
 
 
 def timeout():
@@ -145,7 +145,7 @@ def main(debug=False):
             exit()
 
         line = line.strip()  # remove trailing '\n'
-        if line == '': # prompt again if just whitespace
+        if line == '':  # prompt again if just whitespace
             continue
 
         if line == 'exit':  # exit when reading 'exit' command
@@ -155,7 +155,7 @@ def main(debug=False):
         sp2 = line.split()
         if len(sp1) != 2:  # validate input
             print "Invalid command: " + line
-            continue
+            exit(True)
 
         if sp1[0] == 'sleep':  # sleep command
             time.sleep(int(sp1[1]) / 1000)
@@ -165,14 +165,16 @@ def main(debug=False):
             pid = int(sp2[0])  # first field is pid
         except ValueError:
             print "Invalid pid: " + sp2[0]
-            continue
+            exit(True)
+
         cmd = sp2[1]  # second field is command
         if cmd == 'start':
             try:
                 port = int(sp2[3])
             except ValueError:
                 print "Invalid port: " + sp2[3]
-                continue
+                exit(True)
+
             if debug:
                 process = subprocess.Popen(['./process', str(pid), sp2[2], sp2[3]], preexec_fn=os.setsid)
             else:
