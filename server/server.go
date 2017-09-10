@@ -307,20 +307,24 @@ func serveMaster() {
 			LastTimestamp.mutex.Lock()
 			{
 				stmps := LastTimestamp.value
-				lst := len(stmps) - 1
-				for id, ts := range stmps[:lst] {
+				for id := 0; id < ID; id++ {
 					// add all server ids for which a
 					// heartbeat was sent within the
 					// heartbeat interval
-					if now.Sub(ts) < HEARTBEAT_INTERVAL ||
-						id == ID {
+					if now.Sub(stmps[id]) < HEARTBEAT_INTERVAL {
 						master.WriteString(strconv.Itoa(id))
 						master.WriteByte(',')
 					}
 				}
-				if now.Sub(stmps[lst]) < HEARTBEAT_INTERVAL ||
-					lst == ID {
-					master.WriteString(strconv.Itoa(lst))
+				master.WriteString(strconv.Itoa(ID))
+				for id := ID + 1; id < NUM_PROCS; id++ {
+					// add all server ids for which a
+					// heartbeat was sent within the
+					// heartbeat interval
+					if now.Sub(stmps[id]) < HEARTBEAT_INTERVAL {
+						master.WriteByte(',')
+						master.WriteString(strconv.Itoa(id))
+					}
 				}
 			}
 			LastTimestamp.mutex.Unlock()
