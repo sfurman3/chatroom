@@ -55,7 +55,7 @@ const (
 
 	// Duration between heartbeat messages (i.e. empty messages broadcasted
 	// to other servers to indicate the server is alive)
-	HEARTBEAT_INTERVAL = 500 * time.Millisecond
+	HEARTBEAT_INTERVAL = 200 * time.Millisecond
 
 	// Constants for printing error messages to the terminal
 	BOLD_RED = "\033[31;1m"
@@ -172,10 +172,6 @@ func main() {
 	// Bind the master-facing and server-facing ports and start listening
 	go serveMaster()
 	go fetchMessages()
-
-	// Sleep for a bit to let other servers set up server-facing ports
-	// before delivering the first heartbeat
-	time.Sleep(100 * time.Millisecond)
 	heartbeat()
 }
 
@@ -183,8 +179,8 @@ func main() {
 // every server to indicate that the server is still alive
 func heartbeat() {
 	for {
-		go broadcast(emptyMessage())
 		time.Sleep(HEARTBEAT_INTERVAL)
+		go broadcast(emptyMessage())
 	}
 }
 
