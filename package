@@ -1,0 +1,16 @@
+#!/bin/bash
+netid='saf258'
+
+if [ "$1" == 'clean' ]; then
+    rm -rf saf258.tar
+    exit 0
+fi
+
+rm $netid.tar
+cd ..
+cp -R chatroom $netid
+rm -rf $netid/.git $netid/.gitignore $netid/process $netid/test_output
+find $netid -iname '*.sw*' | xargs rm -f
+tar -cf $netid.tar $netid && tar -tf saf258.tar
+rm -rf $netid
+mv $netid.tar chatroom
