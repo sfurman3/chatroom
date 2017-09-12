@@ -57,6 +57,10 @@ const (
 	// to other servers to indicate the server is alive)
 	HEARTBEAT_INTERVAL = 200 * time.Millisecond
 
+        // Maximum interval after the send timestamp of the last message
+        // received from a server for which the sender is considered alive
+	ALIVE_INTERVAL = 250 * time.Millisecond
+
 	// Constants for printing error messages to the terminal
 	BOLD_RED = "\033[31;1m"
 	NO_STYLE = "\033[0m"
@@ -322,8 +326,8 @@ func handleMaster(masterConn net.Conn) {
 				for id := 0; id < ID; id++ {
 					// add all server ids for which a
 					// heartbeat was sent within the
-					// heartbeat interval
-					if now.Sub(stmps[id]) < HEARTBEAT_INTERVAL {
+					// alive interval
+					if now.Sub(stmps[id]) < ALIVE_INTERVAL {
 						master.WriteString(strconv.Itoa(id))
 						master.WriteByte(',')
 					}
