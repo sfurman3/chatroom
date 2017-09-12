@@ -2,11 +2,11 @@
 netid='saf258'
 
 if [ "$1" == 'clean' ]; then
-    rm -rf saf258.tar
+    rm -f saf258.tar
     exit 0
 fi
 
-rm $netid.tar
+rm $netid.tar &> /dev/null
 cd ..
 cp -R chatroom $netid
 rm -rf $netid/.git $netid/.gitignore $netid/process $netid/test_output
