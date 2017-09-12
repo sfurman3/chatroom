@@ -168,6 +168,10 @@ func Fatal(err ...interface{}) {
 	log.Fatalln(ERROR + " " + fmt.Sprint(err...))
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// server                                                                    //
+///////////////////////////////////////////////////////////////////////////////
+
 func main() {
 	// Bind the master-facing and server-facing ports and start listening
 	go serveMaster()
@@ -249,8 +253,10 @@ func handleMessage(conn net.Conn) {
 	MessagesFIFO.mutex.Unlock()
 }
 
-// serveMaster executes commands from the master process (listening on
-// MASTER_PORT) and returns any requested data
+// serveMaster listens on MASTER_PORT for a connection from a master process
+// and services its commands
+//
+// NOTE: only one master process is served at any given time
 func serveMaster() {
 	// Bind the master-facing port and start listen for commands
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(MASTER_PORT))
@@ -259,10 +265,19 @@ func serveMaster() {
 			strconv.Itoa(MASTER_PORT))
 	}
 
-	masterConn, err := ln.Accept()
-	if err != nil {
-		Fatal(err)
+	for {
+		masterConn, err := ln.Accept()
+		if err != nil {
+			Fatal(err)
+		}
+
+		handleMaster(masterConn)
 	}
+}
+
+// handleMaster executes commands from the master process and responds with any
+// requested data
+func handleMaster(masterConn net.Conn) {
 	defer masterConn.Close()
 
 	master := bufio.NewReadWriter(
@@ -272,7 +287,8 @@ func serveMaster() {
 	for {
 		command, err := master.ReadString('\n')
 		if err != nil {
-			Fatal("connection to master lost")
+			// connection to master lost
+			return
 		}
 
 		command = strings.TrimSpace(command)
