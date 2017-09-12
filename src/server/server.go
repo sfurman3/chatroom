@@ -11,25 +11,25 @@
 //
 //  The following master commands are supported:
 //  --------------------------------------------
-//  - "get\n:		return a list of all received messages
-//  - "alive\n":		return a list of server IDs believed to be alive
+//  - "get\n:               return a list of all received messages
+//  - "alive\n":            return a list of server IDs believed to be alive
 //  - "broadcast <m>\n":    send <m> to everyone alive (including the sender)
 //
 //  Responses have the following format:
 //  ------------------------------------
-//  - "get\n"	-> "messages <msg1>,<msg2>,...\n"
-//  - "alive\n"	-> "alive <id1>,<id2>,...\n"
+//  - "get\n"   -> "messages <msg1>,<msg2>,...\n"
+//  - "alive\n" -> "alive <id1>,<id2>,...\n"
 //
 // You can test a server instance using netcat. For example:
 //  ➜  server 0 1 30000 &
 //  [2] 43246
 //  ➜  netcat localhost 30000
-//  get			(command)
+//  get                         (command)
 //  messages
-//  alive			(command)
+//  alive                       (command)
 //  alive 0
-//  broadcast hello world   (command)
-//  get			(command)
+//  broadcast hello world       (command)
+//  get                         (command)
 //  messages hello world
 //  ^C
 package main
