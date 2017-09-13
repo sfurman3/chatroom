@@ -6,6 +6,7 @@ if [ "$1" == 'clean' ]; then
     exit 0
 fi
 
+<<<<<<< HEAD
 # delete any previous .tar files
 rm $netid.tar &> /dev/null
 
