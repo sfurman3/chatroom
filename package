@@ -6,11 +6,24 @@ if [ "$1" == 'clean' ]; then
     exit 0
 fi
 
+# delete any previous .tar files
 rm $netid.tar &> /dev/null
+
+# make a copy of the project with name $netid
 cd ..
 cp -R chatroom $netid
-rm -rf $netid/.git $netid/.gitignore $netid/process $netid/test_output
-find $netid -iname '*.sw*' | xargs rm -f
-tar -cf $netid.tar $netid && tar -tf saf258.tar
+
+# remove unnecessary files
+cd $netid
+rm -rf .git .gitignore process test_output master.py grading.py docs package
+find . -iname '*.sw*' | xargs rm -f
+cd tests
+ls | grep -v '_.*' | xargs rm -f
+
+# tar the project and print the contents
+cd ../..
+tar -cf $netid.tar $netid && tar -tf $netid.tar
+
+# remove the project copy and move the .tar file to the project folder
 rm -rf $netid
 mv $netid.tar chatroom
