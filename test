@@ -20,7 +20,7 @@ testdir='./tests/'
 
 for file in $files; do
     output="$(./master.py < $testdir$file'.input')"
-    diff=$(colordiff -s <(echo "$output") $testdir$file'.output')
+    diff=$(diff -s <(echo "$output") $testdir$file'.output')
     if [ "$?" != 0 ]; then
         echo FAILURE: $file.input
         echo GOT:
