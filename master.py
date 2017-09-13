@@ -158,7 +158,7 @@ def main(debug=False):
             exit(True)
 
         if sp1[0] == 'sleep':  # sleep command
-            time.sleep(int(sp1[1]) / 1000)
+            time.sleep(float(sp1[1]) / 1000)
             continue
 
         try:
