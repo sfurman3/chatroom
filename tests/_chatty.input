@@ -1,0 +1,11 @@
+0 start 5 10000
+1 start 5 10001
+2 start 5 10002
+3 start 5 10003
+4 start 5 10004
+0 broadcast gossip0
+0 broadcast gossip1
+0 broadcast gossip2
+0 broadcast gossip3
+0 broadcast gossip4
+4 get
