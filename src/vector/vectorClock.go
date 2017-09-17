@@ -12,7 +12,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/sfurman3/chatroom/logical"
+	"github.com/sfurman3/chatroom/src/logical"
 )
 
 // ClockBuilder is an object for creating vector clocks that follows the
