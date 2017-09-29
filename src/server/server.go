@@ -267,17 +267,20 @@ func handleMessage(conn net.Conn) {
 //
 // NOTE: only one master process is served at any given time
 func serveMaster() {
-	// Bind the master-facing port and start listen for commands
+	// Bind the master-facing port and start listening for commands
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(MASTER_PORT))
 	if err != nil {
 		Fatal("failed to bind master-facing port: ",
 			strconv.Itoa(MASTER_PORT))
 	}
 
+	masterConn, err := ln.Accept()
 	for {
-		masterConn, err := ln.Accept()
+		if tcpConnIsClosed(masterConn) {
+			masterConn, err = ln.Accept()
+		}
 		if err != nil {
-			Fatal(err)
+			continue
 		}
 
 		handleMaster(masterConn)
@@ -287,8 +290,6 @@ func serveMaster() {
 // handleMaster executes commands from the master process and responds with any
 // requested data
 func handleMaster(masterConn net.Conn) {
-	defer masterConn.Close()
-
 	master := bufio.NewReadWriter(
 		bufio.NewReader(masterConn),
 		bufio.NewWriter(masterConn))
