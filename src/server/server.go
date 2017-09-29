@@ -39,6 +39,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -57,8 +58,8 @@ const (
 	// to other servers to indicate the server is alive)
 	HEARTBEAT_INTERVAL = 200 * time.Millisecond
 
-        // Maximum interval after the send timestamp of the last message
-        // received from a server for which the sender is considered alive
+	// Maximum interval after the send timestamp of the last message
+	// received from a server for which the sender is considered alive
 	ALIVE_INTERVAL = 250 * time.Millisecond
 
 	// Constants for printing error messages to the terminal
@@ -86,6 +87,9 @@ var (
 		value []time.Time
 		mutex sync.Mutex // mutex for accessing contents
 	}
+
+	// connections established with other servers
+	Connections []net.Conn
 )
 
 // Message represents a message sent from one server to another
@@ -129,6 +133,7 @@ func init() {
 
 	PORT = START_PORT + ID
 	LastTimestamp.value = make([]time.Time, NUM_PROCS)
+	Connections = make([]net.Conn, NUM_PROCS)
 }
 
 // setArgsPositional parses the first three command line arguments into ID,
@@ -403,21 +408,49 @@ func broadcast(msg *Message) {
 	// send message to other servers
 	for id := 0; id < NUM_PROCS; id++ {
 		if id == ID {
-			id++
+			continue
 		}
 
+		send(msgJSON, id)
+	}
+}
+
+// send a message to the server with the given id
+//
+// establishes a connection with the server if none exists and reestablishes
+// one if
+func send(msg string, id int) error {
+	var err error
+	conn := Connections[id]
+	if conn == nil || tcpConnIsClosed(conn) {
 		// NOTE: In the future, you may want to consider using
 		// net.DialTimeout (e.g. the recipient is so busy it cannot
 		// service the send in a reasonable amount of time) and/or
 		// consider starting a new thread for every send to prevent
 		// sends from blocking each other (the timeout might help
 		// prevent a buildup of threads that can't progress)
-		conn, err := net.Dial("tcp", ":"+strconv.Itoa(START_PORT+id))
+		conn, err = net.Dial("tcp", ":"+strconv.Itoa(START_PORT+id))
 		if err != nil {
-			continue
+			Connections[id] = nil
+			return err
 		}
-		defer conn.Close()
-
-		fmt.Fprintln(conn, msgJSON)
 	}
+
+	_, err = fmt.Fprintln(conn, msg)
+	if err != nil {
+		conn.Close()
+		Connections[id] = nil
+	}
+
+	return err
+}
+
+func tcpConnIsClosed(conn net.Conn) bool {
+	one := []byte{}
+	if _, err := conn.Read(one); err == io.EOF {
+		conn.Close()
+		return true
+	}
+
+	return false
 }
