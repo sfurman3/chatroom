@@ -87,9 +87,6 @@ var (
 		value []time.Time
 		mutex sync.Mutex // mutex for accessing contents
 	}
-
-	// connections established with other servers
-	Connections []net.Conn
 )
 
 // Message represents a message sent from one server to another
@@ -133,7 +130,6 @@ func init() {
 
 	PORT = START_PORT + ID
 	LastTimestamp.value = make([]time.Time, NUM_PROCS)
-	Connections = make([]net.Conn, NUM_PROCS)
 }
 
 // setArgsPositional parses the first three command line arguments into ID,
@@ -421,28 +417,19 @@ func broadcast(msg *Message) {
 // establishes a connection with the server if none exists and reestablishes
 // one if
 func send(msg string, id int) error {
-	var err error
-	conn := Connections[id]
-	if conn == nil || tcpConnIsClosed(conn) {
-		// NOTE: In the future, you may want to consider using
-		// net.DialTimeout (e.g. the recipient is so busy it cannot
-		// service the send in a reasonable amount of time) and/or
-		// consider starting a new thread for every send to prevent
-		// sends from blocking each other (the timeout might help
-		// prevent a buildup of threads that can't progress)
-		conn, err = net.Dial("tcp", ":"+strconv.Itoa(START_PORT+id))
-		if err != nil {
-			Connections[id] = nil
-			return err
-		}
+	// NOTE: In the future, you may want to consider using
+	// net.DialTimeout (e.g. the recipient is so busy it cannot
+	// service the send in a reasonable amount of time) and/or
+	// consider starting a new thread for every send to prevent
+	// sends from blocking each other (the timeout might help
+	// prevent a buildup of threads that can't progress)
+	conn, err := net.Dial("tcp", ":"+strconv.Itoa(START_PORT+id))
+	if err != nil {
+		return err
 	}
+	defer conn.Close()
 
 	_, err = fmt.Fprintln(conn, msg)
-	if err != nil {
-		conn.Close()
-		Connections[id] = nil
-	}
-
 	return err
 }
 
