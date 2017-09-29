@@ -6,17 +6,16 @@ function ctrl_c() {
         exit 1
 }
 
+testdir='./tests/grading_tests/'
 files=$(python -c "
 from os import listdir
 from os.path import isfile, join
 import os
 
-testdir = './tests/'
+testdir = '$testdir'
 files = map(lambda x: x[:x.find('.input')], [f for f in listdir(testdir)
         if isfile(join(testdir, f)) and f.find('.input') > -1])
 print ' '.join(files)")
-
-testdir='./tests/'
 
 ./build
 
