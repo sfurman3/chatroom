@@ -37,7 +37,6 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -109,12 +108,6 @@ func newMessage(msg string) *Message {
 // init parses and validates command line arguments (by name or position) and
 // initializes global variables
 func init() {
-	flag.IntVar(&ID, "id", ID, "id of the server {0, ..., n-1}")
-	flag.IntVar(&NUM_PROCS, "n", NUM_PROCS, "total number of servers")
-	flag.IntVar(&MASTER_PORT, "port", MASTER_PORT, "number of the "+
-		"master-facing port")
-	flag.Parse()
-
 	setArgsPositional()
 
 	if NUM_PROCS <= 0 {
@@ -130,17 +123,17 @@ func init() {
 // provided via flags.
 func setArgsPositional() {
 	getIntArg := func(i int) int {
-		arg := flag.Arg(i)
-		if arg == "" {
+		if len(os.Args) < 4 {
 			fmt.Fprintf(os.Stderr, "%v: missing one or more "+
 				"arguments (there are %d)\n"+
 				"(e.g. \"%v 0 1 10000\" OR \"%v -id 0 -n 1 "+
 				"-port 10000)\"\n\n",
 				os.Args, len(REQUIRED_ARGUMENTS),
 				os.Args[0], os.Args[0])
-			flag.PrintDefaults()
 			os.Exit(1)
 		}
+
+		arg := os.Args[i+1]
 		val, err := strconv.Atoi(arg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr,
