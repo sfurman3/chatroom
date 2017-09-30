@@ -12,13 +12,13 @@ type tsMsgQueue struct {
 	mutex sync.Mutex // mutex for accessing contents
 }
 
-func (tsq tsMsgQueue) Enqueue(msg *Message) {
+func (tsq *tsMsgQueue) Enqueue(msg *Message) {
 	tsq.mutex.Lock()
 	tsq.value = append(tsq.value, msg)
 	tsq.mutex.Unlock()
 }
 
-func (tsq tsMsgQueue) WriteMessages(rwr *bufio.ReadWriter) {
+func (tsq *tsMsgQueue) WriteMessages(rwr *bufio.ReadWriter) {
 	tsq.mutex.Lock()
 	if len(tsq.value) > 0 {
 		msgs := tsq.value
@@ -38,13 +38,13 @@ type tsTimestampQueue struct {
 }
 
 // NOTE: assumes message IDs are in {0..n-1}
-func (tsq tsTimestampQueue) UpdateTimestamp(msg *Message) {
+func (tsq *tsTimestampQueue) UpdateTimestamp(msg *Message) {
 	LastTimestamp.mutex.Lock()
 	LastTimestamp.value[msg.Id] = msg.Rts
 	LastTimestamp.mutex.Unlock()
 }
 
-func (tsq tsTimestampQueue) WriteAlive(rwr *bufio.ReadWriter, now time.Time) {
+func (tsq *tsTimestampQueue) WriteAlive(rwr *bufio.ReadWriter, now time.Time) {
 	LastTimestamp.mutex.Lock()
 	{
 		stmps := LastTimestamp.value
