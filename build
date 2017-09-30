@@ -3,5 +3,5 @@ if [ "$1" == 'clean' ]; then
     rm -f process
     rm -rf test_output
 else
-    go build -o process ./src/server/server.go
+    go build -o process ./src/server/
 fi
