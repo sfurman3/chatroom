@@ -45,7 +45,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -77,16 +76,10 @@ var (
 	PORT = -1 // server's port number
 
 	// struct containing all received messages in FIFO order
-	MessagesFIFO struct {
-		value []*Message
-		mutex sync.Mutex // mutex for accessing contents
-	}
+	MessagesFIFO tsMsgQueue
 
 	// struct containing the timestamp of the last message from each server
-	LastTimestamp struct {
-		value []time.Time
-		mutex sync.Mutex // mutex for accessing contents
-	}
+	LastTimestamp tsTimestampQueue
 )
 
 // Message represents a message sent from one server to another
@@ -245,17 +238,13 @@ func handleMessage(conn net.Conn) {
 
 	// Update the heartbeat metadata
 	// NOTE: assumes message IDs are in {0..n-1}
-	LastTimestamp.mutex.Lock()
-	LastTimestamp.value[msg.Id] = msg.Rts
-	LastTimestamp.mutex.Unlock()
+	LastTimestamp.UpdateTimestamp(msg)
 
 	if len(msg.Content) == 0 { // msg is an empty message
 		return
 	}
 
-	MessagesFIFO.mutex.Lock()
-	MessagesFIFO.value = append(MessagesFIFO.value, msg)
-	MessagesFIFO.mutex.Unlock()
+	MessagesFIFO.Enqueue(msg)
 }
 
 // serveMaster listens on MASTER_PORT for a connection from a master process
@@ -318,17 +307,7 @@ func handleMaster(masterConn net.Conn) {
 
 func writeMessages(rwr *bufio.ReadWriter) {
 	rwr.WriteString("messages ")
-	MessagesFIFO.mutex.Lock()
-	if len(MessagesFIFO.value) > 0 {
-		msgs := MessagesFIFO.value
-		lst := len(msgs) - 1
-		for _, msg := range msgs[:lst] {
-			rwr.WriteString(msg.Content)
-			rwr.WriteByte(',')
-		}
-		rwr.WriteString(msgs[lst].Content)
-	}
-	MessagesFIFO.mutex.Unlock()
+	MessagesFIFO.WriteMessages(rwr)
 	rwr.WriteByte('\n')
 
 	err := rwr.Flush()
@@ -341,30 +320,7 @@ func writeAlive(rwr *bufio.ReadWriter) {
 	now := time.Now()
 
 	rwr.WriteString("alive ")
-	LastTimestamp.mutex.Lock()
-	{
-		stmps := LastTimestamp.value
-		for id := 0; id < ID; id++ {
-			// add all server ids for which a
-			// heartbeat was sent within the
-			// alive interval
-			if now.Sub(stmps[id]) < ALIVE_INTERVAL {
-				rwr.WriteString(strconv.Itoa(id))
-				rwr.WriteByte(',')
-			}
-		}
-		rwr.WriteString(strconv.Itoa(ID))
-		for id := ID + 1; id < NUM_PROCS; id++ {
-			// add all server ids for which a
-			// heartbeat was sent within the
-			// heartbeat interval
-			if now.Sub(stmps[id]) < HEARTBEAT_INTERVAL {
-				rwr.WriteByte(',')
-				rwr.WriteString(strconv.Itoa(id))
-			}
-		}
-	}
-	LastTimestamp.mutex.Unlock()
+	LastTimestamp.WriteAlive(rwr, now)
 	rwr.WriteByte('\n')
 
 	err := rwr.Flush()
@@ -405,9 +361,7 @@ func broadcast(msg *Message) {
 
 	// send non-empty messages to self
 	if len(msg.Content) != 0 {
-		MessagesFIFO.mutex.Lock()
-		MessagesFIFO.value = append(MessagesFIFO.value, msg)
-		MessagesFIFO.mutex.Unlock()
+		MessagesFIFO.Enqueue(msg)
 	}
 
 	// send message to other servers
