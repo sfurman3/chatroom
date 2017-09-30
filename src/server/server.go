@@ -58,7 +58,7 @@ const (
 
 	// Maximum interval after the send timestamp of the last message
 	// received from a server for which the sender is considered alive
-	ALIVE_INTERVAL = 250 * time.Millisecond
+	ALIVE_INTERVAL = 200 * time.Millisecond
 
 	// Constants for printing error messages to the terminal
 	BOLD_RED = "\033[31;1m"
