@@ -300,58 +300,9 @@ func handleMaster(masterConn net.Conn) {
 		command = strings.TrimSpace(command)
 		switch command {
 		case "get":
-			master.WriteString("messages ")
-			MessagesFIFO.mutex.Lock()
-			if len(MessagesFIFO.value) > 0 {
-				msgs := MessagesFIFO.value
-				lst := len(msgs) - 1
-				for _, msg := range msgs[:lst] {
-					master.WriteString(msg.Content)
-					master.WriteByte(',')
-				}
-				master.WriteString(msgs[lst].Content)
-			}
-			MessagesFIFO.mutex.Unlock()
-			master.WriteByte('\n')
-
-			err = master.Flush()
-			if err != nil {
-				Fatal(err)
-			}
+			writeMessages(master)
 		case "alive":
-			now := time.Now()
-
-			master.WriteString("alive ")
-			LastTimestamp.mutex.Lock()
-			{
-				stmps := LastTimestamp.value
-				for id := 0; id < ID; id++ {
-					// add all server ids for which a
-					// heartbeat was sent within the
-					// alive interval
-					if now.Sub(stmps[id]) < ALIVE_INTERVAL {
-						master.WriteString(strconv.Itoa(id))
-						master.WriteByte(',')
-					}
-				}
-				master.WriteString(strconv.Itoa(ID))
-				for id := ID + 1; id < NUM_PROCS; id++ {
-					// add all server ids for which a
-					// heartbeat was sent within the
-					// heartbeat interval
-					if now.Sub(stmps[id]) < HEARTBEAT_INTERVAL {
-						master.WriteByte(',')
-						master.WriteString(strconv.Itoa(id))
-					}
-				}
-			}
-			LastTimestamp.mutex.Unlock()
-			master.WriteByte('\n')
-
-			err = master.Flush()
-			if err != nil {
-				Fatal(err)
-			}
+			writeAlive(master)
 		default:
 			broadcastComm := "broadcast "
 			if !strings.HasPrefix(command, broadcastComm) {
@@ -362,6 +313,63 @@ func handleMaster(masterConn net.Conn) {
 			message := command[len(broadcastComm):]
 			broadcast(newMessage(message))
 		}
+	}
+}
+
+func writeMessages(rwr *bufio.ReadWriter) {
+	rwr.WriteString("messages ")
+	MessagesFIFO.mutex.Lock()
+	if len(MessagesFIFO.value) > 0 {
+		msgs := MessagesFIFO.value
+		lst := len(msgs) - 1
+		for _, msg := range msgs[:lst] {
+			rwr.WriteString(msg.Content)
+			rwr.WriteByte(',')
+		}
+		rwr.WriteString(msgs[lst].Content)
+	}
+	MessagesFIFO.mutex.Unlock()
+	rwr.WriteByte('\n')
+
+	err := rwr.Flush()
+	if err != nil {
+		Fatal(err)
+	}
+}
+
+func writeAlive(rwr *bufio.ReadWriter) {
+	now := time.Now()
+
+	rwr.WriteString("alive ")
+	LastTimestamp.mutex.Lock()
+	{
+		stmps := LastTimestamp.value
+		for id := 0; id < ID; id++ {
+			// add all server ids for which a
+			// heartbeat was sent within the
+			// alive interval
+			if now.Sub(stmps[id]) < ALIVE_INTERVAL {
+				rwr.WriteString(strconv.Itoa(id))
+				rwr.WriteByte(',')
+			}
+		}
+		rwr.WriteString(strconv.Itoa(ID))
+		for id := ID + 1; id < NUM_PROCS; id++ {
+			// add all server ids for which a
+			// heartbeat was sent within the
+			// heartbeat interval
+			if now.Sub(stmps[id]) < HEARTBEAT_INTERVAL {
+				rwr.WriteByte(',')
+				rwr.WriteString(strconv.Itoa(id))
+			}
+		}
+	}
+	LastTimestamp.mutex.Unlock()
+	rwr.WriteByte('\n')
+
+	err := rwr.Flush()
+	if err != nil {
+		Fatal(err)
 	}
 }
 
